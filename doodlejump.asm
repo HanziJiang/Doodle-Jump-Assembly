@@ -14,23 +14,37 @@
 #
 # Which milestone is reached in this submission?
 # (See the assignment handout for descriptions of the milestones)
-# - Milestone 1
+# 
+# - Milestone 5
 # 
 # Which approved additional features have been implemented?
 # (See the assignment handout for the list of additional features)
-# 1. (fill in the feature, if any)
-# 2. (fill in the feature, if any)
-# 3. (fill in the feature, if any)
-# ... (add more if necessary)
+
+# For Milestone 4:
+#    1. Game Over / Retry
+#       The game halts and displays GG (Good Game) when the player
+#       loses. After a few seconds, the player is able to retry by
+#       typing s.
+#    2. Different Levels / Dynamic Increase in Difficulty
+#       There are seven levels. Level is determined by score. Higher
+#       level has a faster speed and shorter platform width.
+# For Milestone 5:
+#    1. Boosting / Power-up
+#       Rocket (yellow) makes the doodler jumps for an extra 140 pixels.
+#       Spring (cyan) makes the doodler jumps for an extra 40 pixels.
+#    2. Fancier Graphics
+#       Pretty(?) doodle bird.   
+#    3. Player Name
+#       The user inputs his name before the game starts. After 
+#       pressing Enter, a greeting message appears. Then he can type 
+#       in s to start the game.
 #
-# Any additional information that the TA needs to know:
-# - (write here, if any)
 #####################################################################
 .data
 	displayAddress:      .word 0x10008000           # 268468224
 	tempDisplayAddress:  .word 0x1000A080           # 268476544 = 268468224 + 8192 + 128
 	doodlerOffset:       .word 5556                 # number of bytes from start to the upper left corner of doodle.
-	springOffset:        .word 6840                 # number of bytes from start to the spring.
+	springOffset:        .word 4508                 # number of bytes from start to the spring.
 	rocketOffset:        .word 4                    # number of bytes from start to the spring.
 	platformOffsets:     .word 132, 1296, 1884, 2984, 3516, 4616, 5848, 6960      # number of bytes from start to the left of each platform
 	platformWidth:       .word 9                    # number of pixels of a platform.
@@ -41,17 +55,23 @@
 	pixelsToGo:          .word 0                    # number of pixels to go; negative for going up, otherwise down.
 	score:               .word 0                    
 	overMessage:         .asciiz "\nGame Over.\nYour score is: "
-	greeting:            .asciiz "Welcome, "
+	greeting:            .asciiz "\nWelcome, "
 	playerName:          .space 20
-	sleepTime:           .word 90                   # sleep time in ms
+	playerNamePointer:   .word 1
+	sleepTime:           .word 30                   # sleep time in ms
     
             
 .text
 main:   
-	#li $v0, 8
-	#la $a0, playerName
-	#li $a1, 20
-	#syscall
+	
+	lw $t0, tempDisplayAddress
+	
+	INFINITE_NAME_LOOP:
+		jal HANDLE_NAME_INPUT
+		j INFINITE_NAME_LOOP
+	
+	BEGIN:
+	jal INITIALIZE_GAME
 	
 	# Infinite loop awaits for s to start the game.
 	INFINITE_START_LOOP:
@@ -59,7 +79,6 @@ main:
 		j INFINITE_START_LOOP
 	
 	INFINITE_GAME_LOOP: 
-		
 		jal HANDLE_GAME_INPUT
 		
 		jal DRAW_PLATFORMS
@@ -75,6 +94,83 @@ main:
  
 		j INFINITE_GAME_LOOP
 		
+
+INITIALIZE_GAME:
+	# Repaint tempDisplayAddress
+	REPAINT:
+		li $t2, 0x000000
+		li $t1, 0
+		REPAINT_LOOP:
+			bgt $t1, 8188, RESET_DOODLER
+			add $t3, $t1, $t0
+			sw $t2, 0($t3)
+			add $t1, $t1, 4
+			j REPAINT_LOOP
+	
+	# Reset doodlerOffset
+	RESET_DOODLER:
+	    la $t2, doodlerOffset
+		li $t1, 5556
+		sw $t1, ($t2)
+		
+	# Reset springOffset
+	RESET_SPRING:
+		la $t2, springOffset
+		li $t1, 4508
+		sw $t1, ($t2)
+		
+	# Reset score
+	RESET_SCORE:
+		la $t2, score
+		li $t1, 0
+		sw $t1, ($t2)
+		
+	# Reset rocketOffset
+	RESET_ROCKET:
+		la $t2, rocketOffset
+		li $t1, 4
+		sw $t1, ($t2)
+		
+	# Reset platformOffsets
+	RESET_PLATFORMS:
+		la $t2, platformOffsets
+		li $t1, 132
+		sw $t1, 0($t2)
+		li $t1, 1296
+		sw $t1, 4($t2)
+		li $t1, 1884
+		sw $t1, 8($t2)
+		li $t1, 2984
+		sw $t1, 12($t2)
+		li $t1, 3516
+		sw $t1, 16($t2)
+		li $t1, 4616
+		sw $t1, 20($t2)
+		li $t1, 5848
+		sw $t1, 24($t2)
+		li $t1, 6960
+		sw $t1, 28($t2)
+		
+	# Reset platformWidth
+	RESET_PLATFORM_WIDTH:
+		la $t2, platformWidth
+		li $t1, 9
+		sw $t1, ($t2)
+		
+	# Reset pixelsToGo
+	RESET_PIXELS_TO_GO:
+		la $t2, pixelsToGo
+		li $t1, 0
+		sw $t1, ($t2)
+		
+	# Reset sleepTime
+	RESET_SLEEP:
+		la $t2, sleepTime
+		li $t1, 30
+		sw $t1, ($t2)
+		
+	jr $ra
+
 
 # Copy content from tempDisplayAddress to displayAddress.		
 MOVE_FROM_TEMP:
@@ -105,16 +201,16 @@ END_GAME:
 	lw $a0, score
 	syscall
 	
+	jal DRAW_GG
+	
 	# Wait a few seconds.
 	li $v0, 32
 	li $a0, 6000
  	syscall
- 	jr $ra
 	
-	j EXIT
+	j BEGIN
 	
     
-
 HANDLE_START_INPUT:
     # Push return address to stack
 	addi $sp, $sp, -4
@@ -145,24 +241,31 @@ HANDLE_START_INPUT:
  	beqz $t8, HANDLE_NAME_INPUT_RETURN
  	
  	lw $t2, 0xffff0004
- 	beq $t2, 0x73, HANDLE_ENTER
+ 	beq $t2, 0x0a, HANDLE_ENTER
  	
  	# Return if not character.
  	blt $t2, 0x61, HANDLE_NAME_INPUT_RETURN
  	bgt $t2, 0x7a, HANDLE_NAME_INPUT_RETURN
  	
  	HANDLE_CHARACTER:
-		# Append to playerName.
-		lw $t1, playerName
-		la $t8, playerName
-		sll $t1, $t1, 0x8
-		addu $t1, $t1, $t2
-		sw $t1, ($t8)
-		
-		# Print.
-		li $v0, 4 
-		la $a0, playerName
-		syscall
+ 		la $t4, playerNamePointer
+ 		la $t5, playerName
+ 		lw $t3, playerNamePointer
+ 		
+ 		# Initialize playerNamePointer if its the first letter
+ 		bne $t3, 1, NOT_FIRST_LETTER
+ 		sw $t5, 0($t4)
+ 		
+ 		NOT_FIRST_LETTER:
+ 		
+ 		# Write current letter
+ 		lw $t3, playerNamePointer
+ 		sb $t2, 0($t3)
+ 		
+ 		# Increment playerNamePointer
+ 		addi $t3, $t3, 1
+ 		sw $t3, 0($t4)
+ 		
 		
  	HANDLE_NAME_INPUT_RETURN:
 		# Get return address from stack
@@ -171,6 +274,14 @@ HANDLE_START_INPUT:
  		jr $ra
 	
  	HANDLE_ENTER:
+ 		# Print greeting message.
+ 		li $v0, 4
+		la $a0, greeting
+		syscall
+ 		li $v0, 4
+		la $a0, playerName
+		syscall
+		
  		j INFINITE_START_LOOP
 		
 		
@@ -212,8 +323,6 @@ DRAW_SPRING:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
-	lw $t0, tempDisplayAddress
-	
 	# Color
 	li $t4, 0x0fe8ff
         
@@ -231,8 +340,6 @@ DRAW_SPRING:
     # Push return address to stack
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	
-	lw $t0, tempDisplayAddress
 	
 	# Color
 	li $t4, 0xfff000
@@ -256,8 +363,6 @@ DRAW_DOODLER:
 	li $t4, 0xfff000
     li $t3, 0x0fff00
     li $t2, 0xffffff
-    
-    lw $t0, tempDisplayAddress
         
     lw $t1 doodlerOffset
 	add $t5, $t0, $t1    # t5 = Address of doodler's first pixel.
@@ -283,9 +388,7 @@ DRAW_PLATFORMS:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
-	lw $t0, tempDisplayAddress
-	
-    li $t2, 0xffffff
+    li $t2, 0xcccccc
 	add $t7, $zero, $zero    
 	lw $t8, numPlatform
 	la $t1, platformOffsets   # $t1 = Address(platformOffsets).
@@ -536,47 +639,47 @@ UPDATE_SCORE:
 	lw $t4, score          # Old score.
 	add $t5, $t4, $a1      # New score.
 	
-	# Change difficulty according to old and new score.
+		# Change difficulty according to old and new score.
 	LEVEL_1:
 		bge $t4, 200, LEVEL_2
 		blt $t5, 200, LEVEL_2
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	LEVEL_2:
 		bge $t4, 400, LEVEL_3
 		blt $t5, 400, LEVEL_3
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	LEVEL_3:
 		bge $t4, 600, LEVEL_4
 		blt $t5, 600, LEVEL_4
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	LEVEL_4:
 		bge $t4, 800, LEVEL_5
 		blt $t5, 800, LEVEL_5
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	LEVEL_5:
 		bge $t4, 1000, LEVEL_6
 		blt $t5, 1000, LEVEL_6
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	LEVEL_6:
 		bge $t4, 1200, LEVEL_7
 		blt $t5, 1200, LEVEL_7
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	LEVEL_7:
 		bge $t4, 1400, LEVEL_8
 		blt $t5, 1400, LEVEL_8
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	LEVEL_8:
 		bge $t4, 1400, RETURN_UPDATE_SCORE
 		blt $t5, 1400, RETURN_UPDATE_SCORE
 		jal DECREASE_PLATFORM_WIDTH
-		#jal DECREASE_SLEEP_TIME
+		jal DECREASE_SLEEP_TIME
 	
 	RETURN_UPDATE_SCORE:
 		sw $t5, ($t3)
@@ -595,10 +698,10 @@ DECREASE_PLATFORM_WIDTH:
 	jr $ra
 	
 	
-# Decrease sleepTime by 10.
+# Decrease sleepTime by 5.
 DECREASE_SLEEP_TIME:
 	lw $t6, sleepTime
-	addi $t6, $t6, -10
+	addi $t6, $t6, -5
 	la $t7, sleepTime
 	sw $t6, ($t7)
 	
@@ -751,9 +854,100 @@ ROLL_DOWN:
 SLEEP:
 	lw $t1, sleepTime
 	li $v0, 32
-	li $a0, 90
+	move $a0, $t1
  	syscall
  	jr $ra
+ 	
+DRAW_GG:
+	lw $t9, displayAddress
+	li $t1, 0xffffff
+	
+	li $t2, 2616
+	add $t2, $t2, $t9 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, -128 
+	sw $t1, ($t2)
+	add $t2, $t2, -128 
+	sw $t1, ($t2)
+	add $t2, $t2, -128 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	
+	
+	li $t2, 2644
+	add $t2, $t2, $t9 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 128 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, 4 
+	sw $t1, ($t2)
+	add $t2, $t2, -128 
+	sw $t1, ($t2)
+	add $t2, $t2, -128 
+	sw $t1, ($t2)
+	add $t2, $t2, -128 
+	sw $t1, ($t2)
+	add $t2, $t2, -4 
+	sw $t1, ($t2)
+	
+	jr $ra
  	
 EXIT:
  	li $v0, 10
