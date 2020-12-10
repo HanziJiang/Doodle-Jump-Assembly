@@ -19,7 +19,7 @@
 # 
 # Which approved additional features have been implemented?
 # (See the assignment handout for the list of additional features)
-
+#
 # For Milestone 4:
 #    1. Game Over / Retry
 #       The game halts and displays GG (Good Game) when the player
@@ -32,8 +32,9 @@
 #    1. Boosting / Power-up
 #       Rocket (yellow) makes the doodler jumps for an extra 140 pixels.
 #       Spring (cyan) makes the doodler jumps for an extra 40 pixels.
-#    2. Fancier Graphics
-#       Pretty(?) doodle bird.   
+#    2. Opponent
+#       Game ends if doodler hits evil creature (red). Evil creature 
+#       moves from left to right, top to bottom.  
 #    3. Player Name
 #       The user inputs his name before the game starts. After 
 #       pressing Enter, a greeting message appears. Then he can type 
@@ -45,8 +46,9 @@
 	tempDisplayAddress:  .word 0x1000A080           # 268476544 = 268468224 + 8192 + 128
 	doodlerOffset:       .word 5556                 # number of bytes from start to the upper left corner of doodle.
 	springOffset:        .word 4508                 # number of bytes from start to the spring.
-	rocketOffset:        .word 4                    # number of bytes from start to the spring.
+	rocketOffset:        .word 4                    # number of bytes from start to the rocket.
 	platformOffsets:     .word 132, 1296, 1884, 2984, 3516, 4616, 5848, 6960      # number of bytes from start to the left of each platform
+	evilOffset:          .word 1280                 # number of bytes from start to the eveil creature.                    
 	platformWidth:       .word 9                    # number of pixels of a platform.
 	numPlatform:         .word 8                    # number platforms.
 	jumpHeight:          .word -20                  # number of pixels it jumps when touches a platform; negaive means up.
@@ -81,12 +83,14 @@ main:
 	INFINITE_GAME_LOOP: 
 		jal HANDLE_GAME_INPUT
 		
+ 		jal UPDATE_EVIL
+		jal DRAW_EVIL
+		
+ 		jal UPDATE_DOODLER
 		jal DRAW_PLATFORMS
 		jal DRAW_SPRING
 		jal DRAW_ROCKET
 		jal DRAW_DOODLER
-
- 		jal UPDATE_DOODLER
  		
  		jal MOVE_FROM_TEMP
  		
@@ -129,6 +133,12 @@ INITIALIZE_GAME:
 	RESET_ROCKET:
 		la $t2, rocketOffset
 		li $t1, 4
+		sw $t1, ($t2)
+		
+	# Reset evilOffset
+	RESET_EVIL:
+		la $t2, evilOffset
+		li $t1, 1280
 		sw $t1, ($t2)
 		
 	# Reset platformOffsets
@@ -232,7 +242,7 @@ HANDLE_START_INPUT:
  		j INFINITE_GAME_LOOP
  		
  		
- HANDLE_NAME_INPUT:
+HANDLE_NAME_INPUT:
     # Push return address to stack
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -244,9 +254,13 @@ HANDLE_START_INPUT:
  	beq $t2, 0x0a, HANDLE_ENTER
  	
  	# Return if not character.
- 	blt $t2, 0x61, HANDLE_NAME_INPUT_RETURN
+ 	blt $t2, 0x41, HANDLE_NAME_INPUT_RETURN
  	bgt $t2, 0x7a, HANDLE_NAME_INPUT_RETURN
+ 	bge $t2, 0x61, HANDLE
+ 	ble $t2, 0x6a, HANDLE
+ 	j HANDLE_NAME_INPUT_RETURN
  	
+ 	HANDLE:
  	HANDLE_CHARACTER:
  		la $t4, playerNamePointer
  		la $t5, playerName
@@ -335,8 +349,26 @@ DRAW_SPRING:
 	addi $sp, $sp, 4
  	jr $ra
  	
+ 
+DRAW_EVIL:
+    # Push return address to stack
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	# Color
+	li $t4, 0xf00000
+        
+    lw $t1 evilOffset
+	add $t5, $t0, $t1  
+	sw $t4, ($t5)
+	
+ 	# Get return address from stack
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+ 	jr $ra
  	
- DRAW_ROCKET:
+ 	
+DRAW_ROCKET:
     # Push return address to stack
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -451,6 +483,76 @@ TOUCH_SPRING:
 		addi $sp, $sp, 4
  		jr $ra
  		
+ 
+# If doodler touches the evil creature, write 1 into $v1; otherwise 0.
+TOUCH_EVIL:
+	# Push return address to stack
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lw $t1, evilOffset
+	lw $t2, doodlerOffset
+	j CHECK_EVIL
+	
+	HIT_EVIL:
+		li $v1, 1
+		j RETURN_TOUCH_EVIL
+	
+	# Doodler touches the evil creature if: 
+	# evilOffset == doodlerOffset + 2 * 4; or
+	# in (doodlerOffset + 128) + 1 * 4 to (doodlerOffset + 128) + 3 * 4; or
+	# in (doodlerOffset + 256) to (doodlerOffset + 256) + 4 * 4; or
+	# in (doodlerOffset + 384) + 1 * 4 to (doodlerOffset + 384) + 3 * 4; or
+	# in (doodlerOffset + 512) to (doodlerOffset + 512) + 4 * 4.
+	CHECK_EVIL:
+		addi $t3, $t2, 8
+		beq $t1, $t3, HIT_EVIL
+		
+		addi $t3, $t2, 132
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 136
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 140
+		beq $t1, $t3, HIT_EVIL
+		
+		addi $t3, $t2, 256
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 260
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 264
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 268
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 272
+		beq $t1, $t3, HIT_EVIL
+		
+		addi $t3, $t2, 388
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 392
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 396
+		beq $t1, $t3, HIT_EVIL
+		
+		addi $t3, $t2, 512
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 516
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 520
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 524
+		beq $t1, $t3, HIT_EVIL
+		addi $t3, $t2, 528
+		beq $t1, $t3, HIT_EVIL
+			
+	NO_EVIL:
+		addi $v1, $zero, 0
+		
+	RETURN_TOUCH_EVIL:
+		# Get return address from stack
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+ 		jr $ra
+ 		
  		
  # If doodler touches rocket, write 1 into $v1; otherwise 0.
 TOUCH_ROCKET:
@@ -479,6 +581,30 @@ TOUCH_ROCKET:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
  		jr $ra
+ 		
+ 		
+UPDATE_EVIL:
+	# Push return address to stack
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	la $t3, evilOffset
+	lw $t4, evilOffset
+	addi $t4, $t4, 4
+	sw $t4, ($t3)
+	
+	lw $t2, evilOffset
+	# If creature outside of screen.
+	blt $t2, 8192, RETURN_UPDATE_EVIL
+	# Reset offset of creature.
+	sw $zero, ($t3)
+	
+	RETURN_UPDATE_EVIL:
+		# Get return address from stack
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+ 		jr $ra
+	
 	
 UPDATE_DOODLER:
 	# Push return address to stack
@@ -487,6 +613,10 @@ UPDATE_DOODLER:
 	
 	jal UPDATE_PIXELS_TO_GO
 	
+ 	# If doodler hits evil creature, end game.
+ 	jal TOUCH_EVIL
+ 	beq $v1, 1, END_GAME
+ 	
  	la $t1, doodlerOffset
  	lw $t7, doodlerOffset
  	la $t3, pixelsToGo
@@ -513,7 +643,6 @@ UPDATE_DOODLER:
 		
  	# Else if is going down.
  	GO_DOWN:
- 	
  		# If doodler is too low, exit the game.
  		bgt $t7, 8192, END_GAME
  		
@@ -798,6 +927,29 @@ ROLL_SPRING:
 		jr $ra
 		
 		
+ROLL_EVIL:
+	# Push return address to stack
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	# Roll down the evil creature.
+	la $t3, evilOffset
+	lw $t2, ($t3)
+	addi $t2, $t2, 128
+	sw $t2, 0($t3)
+	
+	# If creature outside of screen.
+	blt $t2, 8192, RETURN_ROLL_EVIL
+	# Reset offset of creature.
+	sw $zero, ($t3)
+	
+	# Get return address from stack.
+	RETURN_ROLL_EVIL:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+		
 ROLL_ROCKET:
 	# Push return address to stack
 	addi $sp, $sp, -4
@@ -844,6 +996,7 @@ ROLL_DOWN:
 	jal ROLL_PLATFORMS
 	jal ROLL_SPRING
 	jal ROLL_ROCKET
+	jal ROLL_EVIL
 	
 	# Get return address from stack.
 	lw $ra, 0($sp)
