@@ -7,7 +7,7 @@ Player enters name, then press s to start the game.<br/>
 Doodle dies when it hits the bottom.<br/>
 ![Alt Text](https://github.com/HanziJiang/Doodle-Jump-Assembly/blob/master/demo/die_demo.gif)
 
-Doodle dies when it hits the evil creature in red.<br/><br/>
+Doodle dies when it hits the evil creature in red.<br/>
 ![Alt Text](https://github.com/HanziJiang/Doodle-Jump-Assembly/blob/master/demo/hit_evil_demo.gif)
 
 Doodle jumps higher when it hits the sprint or the rocket.<br/>
