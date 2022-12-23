@@ -3,7 +3,7 @@
 # CSC258H5S Fall 2020 Assembly Final Project
 # University of Toronto, St. George
 #
-# Student: Hanzi Jiang, 1005104646
+# Student: Hanzi Jiang, 1000000000
 #
 # Bitmap Display Configuration:
 # - Unit width in pixels: 8
